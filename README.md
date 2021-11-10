@@ -28,5 +28,8 @@ f  TEXT ttxt         0       846    Jan 21  1993    A Zillion Sounds:Sound Utils
 f  MooV Vis3      2533    432265    Dec  6  1992    A Zillion Sounds:Sound Utils:Zillion Spin (QuickTime)
 ```
 
+## Strange Text Encodings?
+If the HFS volume features text encodings other than MacRoman, you'll need to convert the output of `hls`. Use this Tcl script to convert exotic text encodings to Unicode (UTF-8): https://gist.github.com/gingerbeardman/4a3b66236e018b72b32ca17953474e12
+
 ## README
 View the original [README](https://github.com/gingerbeardman/hfsutils/blob/main/README) for hfsutils.
