@@ -53,6 +53,8 @@ typedef struct {
 
 typedef struct {
   char name[HFS_MAX_FLEN + 1];	/* catalog name (MacOS Standard Roman) */
+  char *parent;   /* track parent folder for full path display */
+
   int flags;			/* bit flags */
   unsigned long cnid;		/* catalog node id (CNID) */
   unsigned long parid;		/* CNID of parent directory */
