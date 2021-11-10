@@ -71,6 +71,7 @@ int ioctl(int, int, ...);
 # define F_MANY			0x0002
 # define F_HORIZ		0x0003
 # define F_COMMAS		0x0004
+# define F_FULLPATH		0x0005
 
 # define T_MASK			0x0008
 # define T_MOD			0x0000
@@ -441,6 +442,91 @@ void show_long(int sz, queueent *ents, char **strs,
 }
 
 /*
+ * NAME:	show_fullpath()
+ * DESCRIPTION:	output a list of files in fullpath format
+ */
+static
+void show_fullpath(int sz, queueent *ents, char **strs,
+		   int flags, int options, int width)
+{
+  int i;
+  time_t now;
+
+  char volname[32];
+  strcpy(volname, (char*) hcwd_getvol(-1));
+
+  now = time(0);
+
+  for (i = 0; i < sz; ++i)
+    {
+      hfsdirent *ent;
+      time_t when;
+      char timebuf[26];
+
+      ent = &ents[i].dirent;
+
+      switch (options & T_MASK)
+	{
+	case T_MOD:
+	  when = ent->mddate;
+	  break;
+
+	case T_CREATE:
+	  when = ent->crdate;
+	  break;
+
+	default:
+	  abort();
+	}
+
+      strcpy(timebuf, ctime(&when));
+
+      if (now > when + 6L * 30L * 24L * 60L * 60L ||
+	  now < when - 60L * 60L)
+	strcpy(timebuf + 11, timebuf + 19);
+
+      timebuf[16] = 0;
+
+      showmisc(ent, flags);
+
+      if (ent->flags & HFS_ISDIR)
+	printf("d%c           %9u item%c        %s    %s%s:%s\n",
+		ent->fdflags & HFS_FNDR_ISINVISIBLE ? 'i' : ' ',
+		ent->u.dir.valence,
+		ent->u.dir.valence == 1 ? ' ' : 's',
+		timebuf + 4,
+		volname,
+		ent->parent,
+		strs[i]);
+      else
+        if ( ent->u.file.type[0] == '\0' && ent->u.file.creator[0] == '\0' )
+	printf("%c%c %4s %4s %9lu %9lu    %s    %s%s:%s\n",
+		ent->flags & HFS_ISLOCKED ? 'F' : 'f',
+		ent->fdflags & HFS_FNDR_ISINVISIBLE ? 'i' : ' ',
+		ent->u.file.type,
+		ent->u.file.creator,
+		ent->u.file.rsize,
+		ent->u.file.dsize,
+		timebuf + 4,
+		volname,
+		ent->parent,
+		strs[i]);
+        else
+	printf("%c%c %4s %4s %9lu %9lu    %s    %s%s:%s\n",
+		ent->flags & HFS_ISLOCKED ? 'F' : 'f',
+		ent->fdflags & HFS_FNDR_ISINVISIBLE ? 'i' : ' ',
+		ent->u.file.type,
+		ent->u.file.creator,
+		ent->u.file.rsize,
+		ent->u.file.dsize,
+		timebuf + 4,
+		volname,
+		ent->parent,
+		strs[i]);
+    }
+}
+
+/*
  * NAME:	show_one()
  * DESCRIPTION:	output a list of files in single-column format
  */
@@ -654,6 +740,10 @@ int showfiles(darray *files, int flags, int options, int width)
       show = show_commas;
       break;
 
+    case F_FULLPATH:
+      show = show_fullpath;
+      break;
+
     default:
       abort();
     }
@@ -696,12 +786,14 @@ int process(hfsvol *vol, darray *dirs, darray *files,
   for (i = 0; i < dsz; ++i)
     {
       const char *path;
+      char *parent;
       hfsdir *dir;
       queueent ent;
 
       darr_shrink(files, 0);
 
       path = PATH(ents[i]);
+      parent = PATH(ents[i]);
       dir  = hfs_opendir(vol, path);
       if (dir == 0)
 	{
@@ -718,6 +810,7 @@ int process(hfsvol *vol, darray *dirs, darray *files,
 
 	  ent.path = 0;
 	  ent.free = 0;
+	  ent.dirent.parent = parent;
 
 	  if (darr_append(files, &ent) == 0)
 	    {
@@ -777,11 +870,13 @@ int process(hfsvol *vol, darray *dirs, darray *files,
       if (result)
 	break;
 
-      if (flags & HLS_SPACE)
-	printf("\n");
-      if (flags & HLS_NAME)
-	printf("%s%s", path,
-	       path[strlen(path) - 1] == ':' ? "\n" : ":\n");
+      if ( !(flags & F_FULLPATH) ) {
+        if (flags & HLS_SPACE)
+  	printf("\n");
+        if (flags & HLS_NAME)
+  	printf("%s%s", path,
+  	       path[strlen(path) - 1] == ':' ? "\n" : ":\n");
+      }
 
       sortfiles(files, flags, options);
       if (showfiles(files, flags, options, width) == -1)
@@ -871,7 +966,7 @@ int hls_main(int argc, char *argv[])
     {
       int opt;
 
-      opt = getopt(argc, argv, "1abcdfilmqrstxw:CFNQRSU");
+      opt = getopt(argc, argv, "1abcdfilmpqrstxw:CFNQRSU");
       if (opt == EOF)
 	break;
 
@@ -921,6 +1016,13 @@ int hls_main(int argc, char *argv[])
 	case 'm':
 	  options = (options & ~F_MASK) | F_COMMAS;
 	  break;
+
+  case 'p':
+    flags |= HLS_ALL_FILES;
+    flags &= ~(HLS_ESCAPE | HLS_QMARK_CTRL);
+    flags |= HLS_RECURSIVE;
+    options = (options & ~F_MASK) | F_FULLPATH;
+    break;
 
 	case 'q':
 	  flags |= HLS_QMARK_CTRL;
